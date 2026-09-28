@@ -1,6 +1,7 @@
 {
-  "name": "kiln-space-meter",
+  "name": "agb_potsize",
   "private": true,
+  "scripts": { "test": "node --test" }
   "version": "0.1.0",
   "type": "module",
   "scripts": {
