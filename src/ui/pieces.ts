@@ -1,7 +1,7 @@
-import { FIRINGS, feeFor, pieceDims as calcDims, volIn3, type Dims } from '../core/pricing';
-import { IN3_PER_L, fromU, money, toU } from '../core/units';
-import type { Pot } from '../core/types';
-import { $, $i, $s, plural } from './dom';
+import { fetchQuote, type QuotePiece } from '../api';
+import type { Pot } from '../types';
+import { IN3_PER_L, fromU, money, toU } from '../units';
+import { $, $i, $s, plural, toast } from './dom';
 import { fmtU, volStr } from './format';
 import { resetMeta, state } from './state';
 
@@ -16,13 +16,6 @@ export function sidePots(): Pot[] | null {
 }
 export const roundOn = () => $i('roundUp').checked;
 export const minFee = () => parseFloat($i('minFee').value) || 0;
-
-export function pieceDims(i: number): Dims {
-  const p = frontOk()!.pots[i], m = state.meta[i], sp = sidePots(), sd = sp ? sp[i] : null;
-  return calcDims(state.unit, { wMm: p.wMm, hMm: p.hMm, side: sd ? { hMm: sd.hMm, wMm: sd.wMm } : null, round: m.round, depthMm: m.depthMm }, roundOn());
-}
-export const volOf = (d: Dims) => volIn3(state.unit, d);
-export const feeOf = (v3: number, firing: string) => feeFor(v3, firing, state.rates, minFee());
 
 /** Keep the per-piece metadata array the same length as the number of front-view pieces. */
 export function syncMeta() {
@@ -52,7 +45,7 @@ export function renderPieces() {
     nm.value = m.name;
     nm.oninput = () => { m.name = nm.value; };
     const fs = $s('pfi' + i);
-    FIRINGS.forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.label; fs.append(o); });
+    state.firings.forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.label; fs.append(o); });
     fs.value = m.firing;
     fs.onchange = () => { m.firing = fs.value; updatePieces(); };
     const rd = $i('pr' + i);
@@ -68,30 +61,48 @@ export function renderPieces() {
   updatePieces();
 }
 
+let quoteSeq = 0;
+
+/** Ask the backend to measure and price every piece, then render the answer (stale replies are dropped). */
 export function updatePieces() {
-  const { unit, meta } = state;
+  const F = frontOk();
+  const seq = ++quoteSeq;
+  if (!F) { state.quote = null; renderTotals(); return; }
+  const sp = sidePots();
+  const pieces: QuotePiece[] = F.pots.map((p, i) => ({
+    wMm: p.wMm, hMm: p.hMm, sideWMm: sp?.[i].wMm, sideHMm: sp?.[i].hMm,
+    round: state.meta[i].round, depthMm: state.meta[i].depthMm, firing: state.meta[i].firing, qty: state.meta[i].qty || 1,
+  }));
+  fetchQuote({ unit: state.unit, pieces, rates: state.rates, minFee: minFee(), roundUp: roundOn() }).then(q => {
+    if (seq !== quoteSeq) return;
+    state.quote = q;
+    renderTotals();
+  }, e => { if (seq === quoteSeq) toast(`Could not price the pieces: ${e.message}`); });
+  renderTotals(); // immediate pass for labels that don't need a price
+}
+
+function renderTotals() {
+  const { unit, meta } = state, q = state.quote;
   const F = frontOk(), n = F ? F.pots.length : 0, items = F ? meta.reduce((a, m) => a + (m.qty || 1), 0) : 0;
   $('piecesTitle').textContent = n ? `${plural(n, 'piece')} in this photo` : 'Pieces in this photo';
   $('addBtn').textContent = items > 1 ? `Add ${plural(items, 'item')} to firing slip` : 'Add to firing slip';
-  $i('addBtn').disabled = !n;
+  $i('addBtn').disabled = !n || !q || q.items.length !== n;
   if (!F) { $('oVol').textContent = '–'; $('oCost').textContent = '–'; $('oExplain').textContent = ''; return; }
   const sp = sidePots();
-  let tv = 0, tf = 0;
+  if (!q || q.items.length !== n) return; // wait for the first price
   F.pots.forEach((_, i) => {
-    const q = meta[i].qty || 1, d = pieceDims(i), v3 = volOf(d), { fee, atMin } = feeOf(v3, meta[i].firing);
-    tv += v3 * q;
-    tf += fee * q;
-    $('pf' + i).textContent = money(fee * q);
+    const it = q.items[i], d = it.dims, qty = it.qty;
+    $('pf' + i).textContent = money(it.fee * qty);
     const src = d.src === 'side' ? 'depth from side view' : d.src === 'round' ? 'depth = width' : 'depth entered';
-    $('pd' + i).innerHTML = `<span class="num">${fmtU(d.h)} × ${fmtU(d.w)} × ${fmtU(d.d)} ${unit}</span><span class="num">${volStr({ vol: v3 })}${q > 1 ? ' each' : ''}</span>${q > 1 ? `<span class="raw">${q} × ${money(fee)}${atMin ? ' minimum fee' : ''}</span>` : atMin ? '<span class="raw">minimum fee</span>' : ''}<span class="raw">H × W × D · ${src}${roundOn() ? ` · measured ${fmtU(d.hRaw)} × ${fmtU(d.wRaw)}` : ''}</span>`;
+    $('pd' + i).innerHTML = `<span class="num">${fmtU(d.h)} × ${fmtU(d.w)} × ${fmtU(d.d)} ${unit}</span><span class="num">${volStr({ vol: it.vol })}${qty > 1 ? ' each' : ''}</span>${qty > 1 ? `<span class="raw">${qty} × ${money(it.fee)}${it.atMin ? ' minimum fee' : ''}</span>` : it.atMin ? '<span class="raw">minimum fee</span>' : ''}<span class="raw">H × W × D · ${src}${roundOn() ? ` · measured ${fmtU(d.hRaw)} × ${fmtU(d.wRaw)}` : ''}</span>`;
     $('prl' + i).hidden = !!sp;
     const dp = $i('pdep' + i);
     dp.hidden = !!sp || meta[i].round;
     dp.placeholder = `Depth (${unit})`;
     if (document.activeElement !== dp && meta[i].depthMm != null) dp.value = fmtU(toU(unit, meta[i].depthMm!));
   });
-  $('oVol').innerHTML = unit === 'in' ? Math.round(tv).toLocaleString() + ' <em>in³ total</em>' : (tv / IN3_PER_L).toFixed(2) + ' <em>litres total</em>';
-  $('oCost').textContent = money(tf);
+  $('oVol').innerHTML = unit === 'in' ? Math.round(q.totalVol).toLocaleString() + ' <em>in³ total</em>' : (q.totalVol / IN3_PER_L).toFixed(2) + ' <em>litres total</em>';
+  $('oCost').textContent = money(q.totalFee);
   const S = state.views.side && state.views.side.result;
   $('oExplain').textContent = sp ? 'Each depth comes from the side view.' : S && S.ok ? 'The side view shows a different number of pieces, so it is not used.' : 'Round pieces use their width as depth. Untick “Round” to enter a depth, or add a side view.';
 }

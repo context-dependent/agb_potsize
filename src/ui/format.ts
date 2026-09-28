@@ -1,4 +1,4 @@
-import { IN3_PER_L, fmt } from '../core/units';
+import { IN3_PER_L, fmt } from '../units';
 import type { SlipItem } from './state';
 import { state } from './state';
 

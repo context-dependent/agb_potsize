@@ -1,5 +1,5 @@
-import type { Pot } from '../core/types';
-import { toU } from '../core/units';
+import type { Pot } from '../types';
+import { toU } from '../units';
 import { $ } from './dom';
 import { fmtU } from './format';
 import { settings, state, type View } from './state';
@@ -7,22 +7,19 @@ import { settings, state, type View } from './state';
 const cv = $<HTMLCanvasElement>('cv');
 const ctx = cv.getContext('2d')!;
 const css = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const overlayCache = new WeakMap<object, HTMLCanvasElement>();
 
-/** Translucent pot fill plus solid outline, at segmentation resolution. */
-function maskOverlay(v: View): HTMLCanvasElement {
+/** Translucent pot fill plus solid outline, from the backend's outline polygons (segmentation pixels). */
+function drawMask(v: View, w: number, h: number) {
   const r = v.result;
-  if (!r.ok) throw new Error('no mask');
-  if (overlayCache.has(r)) return overlayCache.get(r)!;
-  const [w, h] = r.segSize, c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d')!, im = g.createImageData(w, h), d = im.data, lab = r.seg.lab, ids = new Set(r.pots.map(p => p.id));
-  for (let i = 0; i < w * h; i++) if (ids.has(lab[i])) { d[4 * i] = 240; d[4 * i + 1] = 180; d[4 * i + 2] = 40; d[4 * i + 3] = 70; }
-  for (const p of r.pots) for (const [x, y] of p.pts) { const i = y * w + x; d[4 * i] = 255; d[4 * i + 1] = 196; d[4 * i + 2] = 40; d[4 * i + 3] = 255; }
-  g.putImageData(im, 0, 0);
-  overlayCache.set(r, c);
-  return c;
+  if (!r.ok) return;
+  const k = w / r.segSize[0];
+  ctx.beginPath();
+  for (const pot of r.pots) for (const ring of pot.outline) ring.forEach((q, i) => (i ? ctx.lineTo((q[0] + .5) * k, (q[1] + .5) * k) : ctx.moveTo((q[0] + .5) * k, (q[1] + .5) * k)));
+  ctx.fillStyle = 'rgba(240,180,40,.27)';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, k);
+  ctx.strokeStyle = 'rgb(255,196,40)';
+  ctx.stroke();
 }
 
 function poly(p: number[][]) {
@@ -93,9 +90,7 @@ export function draw() {
   if (!r) return;
   const REF = css('--ref'), POT = css('--pot');
   if (r.ok) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(maskOverlay(v), 0, 0, cv.width, cv.height);
-    ctx.imageSmoothingEnabled = true;
+    drawMask(v, cv.width, cv.height);
     r.pots.forEach((pt, i) => drawPot(pt, i, S, dpr, POT));
   }
   if (r.marker) {

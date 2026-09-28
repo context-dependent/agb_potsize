@@ -1,4 +1,4 @@
-import type { Analysis } from '../core/types';
+import type { Analysis } from '../types';
 import { $, $s, plural } from './dom';
 import { settings, state, type ViewKey } from './state';
 
@@ -9,7 +9,7 @@ export function checksFor(r: Analysis | undefined, which: ViewKey): Check[] {
   const L: Check[] = [];
   if (!r) return L;
   if (!r.marker) {
-    L.push(['bad', r.ids && r.ids.length ? `Found marker ID ${r.ids.join(', ')}, but the booth is set to ID ${$s('mId').value}.` : 'No ArUco marker found. Make sure the whole card is in frame, in focus, and not in glare.']);
+    L.push(['bad', r.ids.length ? `Found marker ID ${r.ids.join(', ')}, but the booth is set to ID ${$s('mId').value}.` : 'No ArUco marker found. Make sure the whole card is in frame, in focus, and not in glare.']);
     return L;
   }
   const mk = r.marker, mmPerPx = settings().size / mk.sidePx;
