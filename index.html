@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiln Space Meter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@75..150,500..800&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Kiln Space Meter
+      <small>Photograph your work in the studio's photo booth, one piece or a whole row. The app finds the ArUco marker, traces each piece against the backdrop, and prices the kiln space each one takes.</small>
+    </h1>
+  </header>
+
+  <div class="app">
+    <section class="col">
+      <div class="panel">
+        <div class="views" role="group" aria-label="Photos">
+          <button type="button" class="view" id="vFront" aria-pressed="true">
+            <span class="t">Front view</span><span class="s"><i class="dot" id="dFront"></i><span id="sFront">No photo</span></span>
+          </button>
+          <button type="button" class="view" id="vSide" aria-pressed="false">
+            <span class="t">Side view <span class="note">(optional)</span></span><span class="s"><i class="dot" id="dSide"></i><span id="sSide">Turn each piece 90°</span></span>
+          </button>
+        </div>
+        <div class="toolbar">
+          <label class="btn primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            <span id="shootLbl">Photograph front view</span>
+            <input id="file" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+          <button class="btn" id="sampleBtn" type="button">Load sample</button>
+          <button class="btn" id="clearViewBtn" type="button" hidden>Remove side view</button>
+        </div>
+        <div class="stage" id="stage">
+          <canvas id="cv" aria-label="Photo with the detected marker and pot outline"></canvas>
+          <p class="emptyview" id="emptyView" hidden>No side view yet. Turn each piece a quarter turn where it stands, keeping the same order, and take a second photo to measure depths. Skip this for round pieces.</p>
+          <span class="badge" id="badge" hidden>Sample photo</span>
+          <div class="busy" id="busy" hidden>Measuring…</div>
+        </div>
+        <ul class="checks" id="checks"></ul>
+      </div>
+
+      <div class="panel">
+        <details class="booth">
+          <summary>Booth setup and marker</summary>
+          <div class="body">
+            <svg viewBox="0 0 520 250" role="img" aria-label="Top view of the photo booth: backdrop at the back, pieces standing along the marker line, marker card on the same line beside them, phone at least one metre in front.">
+              <path d="M40 40 Q260 10 480 40" fill="none" stroke="var(--ref)" stroke-width="6" stroke-linecap="round"/>
+              <text x="260" y="22" text-anchor="middle">Plain backdrop sweep (matte, one colour)</text>
+              <line x1="60" y1="100" x2="460" y2="100" stroke="var(--muted)" stroke-dasharray="5 5"/>
+              <text x="62" y="92">Marker line</text>
+              <circle cx="110" cy="100" r="24" fill="none" stroke="var(--pot)" stroke-width="3"/>
+              <circle cx="176" cy="100" r="16" fill="none" stroke="var(--pot)" stroke-width="3"/>
+              <circle cx="240" cy="100" r="28" fill="none" stroke="var(--pot)" stroke-width="3"/>
+              <text x="176" y="148" text-anchor="middle">Pieces stand along the line</text>
+              <rect x="318" y="96" width="60" height="8" fill="var(--ink)"/>
+              <text x="348" y="124" text-anchor="middle">Marker card, face to camera</text>
+              <text x="292" y="92" text-anchor="middle">≥ 5 cm</text>
+              <rect x="235" y="205" width="50" height="14" rx="3" fill="var(--ink)"/>
+              <text x="260" y="238" text-anchor="middle">Phone on a fixed holder at pot mid-height</text>
+              <line x1="260" y1="200" x2="260" y2="136" stroke="var(--muted)" stroke-dasharray="2 4"/>
+              <text x="268" y="180">≥ 1 m</text>
+            </svg>
+            <ol>
+              <li>The marker card stands upright, with its centre on the same line as the centre of the pot spot, and faces the camera squarely. The app measures the pot in the plane of the marker, so the two must be the same distance from the camera.</li>
+              <li>Stand several pieces side by side along the marker line to price them from one photo. Leave about 2 cm between pieces, or two touching pieces are measured as one, and 5 cm between the last piece and the card.</li>
+              <li>Use a matte, evenly lit backdrop in a colour few glazes share. Chroma-key blue works for most work. Keep a grey sheet for blue-glazed pieces.</li>
+              <li>Diffuse light from both sides keeps the floor shadow faint, so it isn't counted as part of the pot.</li>
+              <li>Print the marker at 100% scale and check its black square with a ruler. Enter that measurement in the settings below.</li>
+            </ol>
+          </div>
+        </details>
+        <details>
+          <summary>Studio settings</summary>
+          <div class="body">
+            <div class="row">
+              <div class="field">
+                <label class="label" for="mSize">Marker size, black square (mm)</label>
+                <input id="mSize" type="number" min="10" step="0.5" value="80">
+              </div>
+              <div class="field">
+                <label class="label" for="mId">Booth marker ID (ArUco 4×4)</label>
+                <select id="mId"></select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="tol">Backdrop tolerance <span class="num" id="tolVal"></span></label>
+              <input id="tol" type="range" min="1.2" max="4" step="0.1" value="2">
+              <p class="note">Raise it if the backdrop or shadow is being counted as pot. Lower it if pale parts of the pot are cut off.</p>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="col">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h2 id="piecesTitle">Pieces in this photo</h2>
+          <div class="seg" role="group" aria-label="Units">
+            <button type="button" id="uIn" aria-pressed="true">in</button>
+            <button type="button" id="uCm" aria-pressed="false">cm</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="roundUp" checked><span>Round each dimension up to the next <span id="stepLbl">½ in</span>, as most studios do</span></label>
+        <div class="pieces" id="pieces"></div>
+        <div class="total" id="totalRow">
+          <div class="vol" id="oVol">–</div>
+          <div class="cost" id="oCost">–</div>
+        </div>
+        <p class="note" id="oExplain"></p>
+        <button class="btn primary" id="addBtn" type="button">Add all to firing slip</button>
+      </div>
+
+      <div class="panel">
+        <details>
+          <summary>Firing rates</summary>
+          <div class="body">
+            <div class="row">
+              <div class="field">
+                <label class="label" for="firing">Firing</label>
+                <select id="firing"></select>
+              </div>
+              <div class="field">
+                <label class="label" for="rate">Rate ($ per <span id="rateUnit">in³</span>)</label>
+                <input id="rate" type="number" min="0" step="0.001">
+              </div>
+              <div class="field">
+                <label class="label" for="minFee">Minimum per piece ($)</label>
+                <input id="minFee" type="number" min="0" step="0.25" value="1.00">
+              </div>
+            </div>
+            <p class="note">Rates shown are examples. Set them to your studio's posted prices. The firing chosen here is also the default for new pieces.</p>
+          </div>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="slip">
+          <div class="slip-head">
+            <h2>Firing slip</h2>
+            <span class="label" id="slipDate"></span>
+          </div>
+          <div class="field">
+            <label class="label" for="potter">Potter</label>
+            <input id="potter" type="text" placeholder="Your name or member number">
+          </div>
+          <div class="tblwrap" id="slipTable"></div>
+          <div class="toolbar">
+            <button class="btn small" id="copyBtn" type="button">Copy slip as text</button>
+            <button class="btn small" id="clearBtn" type="button">Clear slip</button>
+            <span id="clearConfirm" hidden style="display:inline-flex;gap:6px;align-items:center;font-size:13px">Remove every piece?
+              <button class="btn small" id="clearYes" type="button">Yes, clear</button>
+              <button class="btn small" id="clearNo" type="button">Keep</button>
+            </span>
+          </div>
+          <textarea id="copyfallback" hidden readonly aria-label="Slip text to copy"></textarea>
+          <p class="note">The slip is saved on this phone only. Paste the copied text into your studio's drop-off form or chat.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
