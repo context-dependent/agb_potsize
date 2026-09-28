@@ -1,0 +1,823 @@
+<title>Kiln Space Meter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@75..150,500..800&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#ECF0EB; --surface:#F8FAF7; --sunk:#DFE6E0; --ink:#1D2824; --muted:#5B6B64; --line:#C6D1CA;
+  --accent:#2F6F5E; --accent-ink:#FFFFFF; --ref:#2E5BD9; --pot:#E0A21B; --warn:#9A5B12; --bad:#B3261E; --ok:#2F6F5E;
+  --display:"Anybody","Arial Narrow",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#121816; --surface:#1A2320; --sunk:#232E2A; --ink:#E3EAE6; --muted:#98A8A0; --line:#33413C;
+    --accent:#6DBBA4; --accent-ink:#0E1513; --ref:#7FA2FF; --pot:#F2B940; --warn:#E3A55A; --bad:#FF8A80; --ok:#6DBBA4;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121816; --surface:#1A2320; --sunk:#232E2A; --ink:#E3EAE6; --muted:#98A8A0; --line:#33413C;
+  --accent:#6DBBA4; --accent-ink:#0E1513; --ref:#7FA2FF; --pot:#F2B940; --warn:#E3A55A; --bad:#FF8A80; --ok:#6DBBA4;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--display);font-stretch:128%;font-weight:800;font-size:clamp(28px,6vw,44px);line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 small{display:block;font-family:var(--body);font-stretch:100%;font-weight:500;font-size:15px;color:var(--muted);letter-spacing:0;margin-top:8px;max-width:62ch;line-height:1.45}
+h2{font-family:var(--display);font-stretch:115%;font-weight:700;font-size:18px;margin:0}
+.label{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.app{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:920px){.app{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.col{display:flex;flex-direction:column;gap:20px;min-width:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{min-height:34px;padding:6px 10px;font-size:13px}
+.btn:focus-visible,input:focus-visible,select:focus-visible,.seg button:focus-visible,label.btn:focus-within{outline:2px solid var(--ref);outline-offset:2px}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.view{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg);display:flex;flex-direction:column;gap:6px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.view[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.view .t{font-weight:600;font-size:14px}
+.view .s{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.warn{background:var(--warn)}
+.stage{position:relative;background:var(--sunk);border-radius:8px;overflow:hidden;display:flex;justify-content:center;min-height:200px;align-items:center}
+canvas#cv{display:block;max-width:100%}
+.badge{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.62);color:#fff;font-size:12px;font-weight:600;padding:4px 8px;border-radius:6px;letter-spacing:.02em}
+.busy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);color:#fff;font-weight:600}
+.emptyview{color:var(--muted);font-size:14px;padding:40px 16px;text-align:center;max-width:36ch}
+.checks{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;font-size:14px}
+.checks li{display:flex;gap:10px;align-items:flex-start}
+.checks .dot{margin-top:7px}
+.checks .num{font-size:13px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+input[type=text],input[type=number],select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:42px;width:100%;min-width:0}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.check input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--accent);flex:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-weight:600;font-size:13px;border:0;background:transparent;color:var(--muted);padding:7px 14px;cursor:pointer;min-height:36px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.readout{display:flex;flex-direction:column;gap:12px}
+.dims{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.dims div{background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:500}
+.dims .num{font-size:20px}
+.dims .raw{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.pieces{display:flex;flex-direction:column;gap:10px}
+.piece{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.phead{display:flex;align-items:center;gap:10px}
+.pnum{flex:none;width:28px;height:28px;border-radius:50%;background:var(--pot);color:#1D2824;font-weight:700;font-family:var(--mono);display:flex;align-items:center;justify-content:center;font-size:14px}
+.phead input{flex:1}
+.pfee{font-family:var(--mono);font-size:18px;color:var(--accent);white-space:nowrap}
+.pdims{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px}
+.pdims .raw{font-size:12px;color:var(--muted)}
+.popts{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;align-items:center}
+.popts .check,.popts input[id^=pdep]{grid-column:1 / -1}
+.qty{display:flex;align-items:center;gap:8px}
+.qty input{width:100%;text-align:center}
+.total{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px;padding-top:4px}
+.total .vol{font-family:var(--display);font-stretch:120%;font-weight:800;font-size:34px;line-height:1.05}
+.total .vol em{font-style:normal;font-family:var(--body);font-weight:500;font-size:15px;color:var(--muted);font-stretch:100%}
+.total .cost{font-family:var(--mono);font-size:26px;font-weight:500;color:var(--accent)}
+.note{font-size:13px;color:var(--muted);margin:0}
+.warn{font-size:13px;color:var(--warn);margin:0}
+details summary{cursor:pointer;font-weight:600}
+details .body{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+details ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.booth svg{width:100%;height:auto;max-width:520px;display:block}
+.booth svg text{font-family:var(--body);font-size:12px;fill:var(--muted)}
+.slip{border:1px dashed var(--muted);border-radius:6px;padding:14px;background:var(--bg);display:flex;flex-direction:column;gap:10px}
+.slip-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.slip table{width:100%;border-collapse:collapse;font-size:13.5px}
+.slip th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;letter-spacing:.07em;text-transform:uppercase;padding:4px 6px;border-bottom:1px solid var(--line)}
+.slip td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.slip td.r,.slip th.r{text-align:right}
+.slip td .num{white-space:nowrap}
+.slip tfoot td{border-bottom:0;font-weight:600;padding-top:9px}
+.x{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px}
+.x:hover{color:var(--ink);background:var(--sunk)}
+.tblwrap{overflow-x:auto}
+.empty{color:var(--muted);font-size:13.5px;margin:0}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:calc(100% - 32px)}
+.toast.show{opacity:1}
+textarea#copyfallback{width:100%;min-height:120px;font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Kiln Space Meter
+      <small>Photograph your work in the studio's photo booth, one piece or a whole row. The app finds the ArUco marker, traces each piece against the backdrop, and prices the kiln space each one takes.</small>
+    </h1>
+  </header>
+
+  <div class="app">
+    <section class="col">
+      <div class="panel">
+        <div class="views" role="group" aria-label="Photos">
+          <button type="button" class="view" id="vFront" aria-pressed="true">
+            <span class="t">Front view</span><span class="s"><i class="dot" id="dFront"></i><span id="sFront">No photo</span></span>
+          </button>
+          <button type="button" class="view" id="vSide" aria-pressed="false">
+            <span class="t">Side view <span class="note">(optional)</span></span><span class="s"><i class="dot" id="dSide"></i><span id="sSide">Turn each piece 90°</span></span>
+          </button>
+        </div>
+        <div class="toolbar">
+          <label class="btn primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            <span id="shootLbl">Photograph front view</span>
+            <input id="file" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+          <button class="btn" id="sampleBtn" type="button">Load sample</button>
+          <button class="btn" id="clearViewBtn" type="button" hidden>Remove side view</button>
+        </div>
+        <div class="stage" id="stage">
+          <canvas id="cv" aria-label="Photo with the detected marker and pot outline"></canvas>
+          <p class="emptyview" id="emptyView" hidden>No side view yet. Turn each piece a quarter turn where it stands, keeping the same order, and take a second photo to measure depths. Skip this for round pieces.</p>
+          <span class="badge" id="badge" hidden>Sample photo</span>
+          <div class="busy" id="busy" hidden>Measuring…</div>
+        </div>
+        <ul class="checks" id="checks"></ul>
+      </div>
+
+      <div class="panel">
+        <details class="booth">
+          <summary>Booth setup and marker</summary>
+          <div class="body">
+            <svg viewBox="0 0 520 250" role="img" aria-label="Top view of the photo booth: backdrop at the back, pieces standing along the marker line, marker card on the same line beside them, phone at least one metre in front.">
+              <path d="M40 40 Q260 10 480 40" fill="none" stroke="var(--ref)" stroke-width="6" stroke-linecap="round"/>
+              <text x="260" y="22" text-anchor="middle">Plain backdrop sweep (matte, one colour)</text>
+              <line x1="60" y1="100" x2="460" y2="100" stroke="var(--muted)" stroke-dasharray="5 5"/>
+              <text x="62" y="92">Marker line</text>
+              <circle cx="110" cy="100" r="24" fill="none" stroke="var(--pot)" stroke-width="3"/>
+              <circle cx="176" cy="100" r="16" fill="none" stroke="var(--pot)" stroke-width="3"/>
+              <circle cx="240" cy="100" r="28" fill="none" stroke="var(--pot)" stroke-width="3"/>
+              <text x="176" y="148" text-anchor="middle">Pieces stand along the line</text>
+              <rect x="318" y="96" width="60" height="8" fill="var(--ink)"/>
+              <text x="348" y="124" text-anchor="middle">Marker card, face to camera</text>
+              <text x="292" y="92" text-anchor="middle">≥ 5 cm</text>
+              <rect x="235" y="205" width="50" height="14" rx="3" fill="var(--ink)"/>
+              <text x="260" y="238" text-anchor="middle">Phone on a fixed holder at pot mid-height</text>
+              <line x1="260" y1="200" x2="260" y2="136" stroke="var(--muted)" stroke-dasharray="2 4"/>
+              <text x="268" y="180">≥ 1 m</text>
+            </svg>
+            <ol>
+              <li>The marker card stands upright, with its centre on the same line as the centre of the pot spot, and faces the camera squarely. The app measures the pot in the plane of the marker, so the two must be the same distance from the camera.</li>
+              <li>Stand several pieces side by side along the marker line to price them from one photo. Leave about 2 cm between pieces, or two touching pieces are measured as one, and 5 cm between the last piece and the card.</li>
+              <li>Use a matte, evenly lit backdrop in a colour few glazes share. Chroma-key blue works for most work. Keep a grey sheet for blue-glazed pieces.</li>
+              <li>Diffuse light from both sides keeps the floor shadow faint, so it isn't counted as part of the pot.</li>
+              <li>Print the marker at 100% scale and check its black square with a ruler. Enter that measurement in the settings below.</li>
+            </ol>
+          </div>
+        </details>
+        <details>
+          <summary>Studio settings</summary>
+          <div class="body">
+            <div class="row">
+              <div class="field">
+                <label class="label" for="mSize">Marker size, black square (mm)</label>
+                <input id="mSize" type="number" min="10" step="0.5" value="80">
+              </div>
+              <div class="field">
+                <label class="label" for="mId">Booth marker ID (ArUco 4×4)</label>
+                <select id="mId"></select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="tol">Backdrop tolerance <span class="num" id="tolVal"></span></label>
+              <input id="tol" type="range" min="1.2" max="4" step="0.1" value="2">
+              <p class="note">Raise it if the backdrop or shadow is being counted as pot. Lower it if pale parts of the pot are cut off.</p>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="col">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h2 id="piecesTitle">Pieces in this photo</h2>
+          <div class="seg" role="group" aria-label="Units">
+            <button type="button" id="uIn" aria-pressed="true">in</button>
+            <button type="button" id="uCm" aria-pressed="false">cm</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="roundUp" checked><span>Round each dimension up to the next <span id="stepLbl">½ in</span>, as most studios do</span></label>
+        <div class="pieces" id="pieces"></div>
+        <div class="total" id="totalRow">
+          <div class="vol" id="oVol">–</div>
+          <div class="cost" id="oCost">–</div>
+        </div>
+        <p class="note" id="oExplain"></p>
+        <button class="btn primary" id="addBtn" type="button">Add all to firing slip</button>
+      </div>
+
+      <div class="panel">
+        <details>
+          <summary>Firing rates</summary>
+          <div class="body">
+            <div class="row">
+              <div class="field">
+                <label class="label" for="firing">Firing</label>
+                <select id="firing"></select>
+              </div>
+              <div class="field">
+                <label class="label" for="rate">Rate ($ per <span id="rateUnit">in³</span>)</label>
+                <input id="rate" type="number" min="0" step="0.001">
+              </div>
+              <div class="field">
+                <label class="label" for="minFee">Minimum per piece ($)</label>
+                <input id="minFee" type="number" min="0" step="0.25" value="1.00">
+              </div>
+            </div>
+            <p class="note">Rates shown are examples. Set them to your studio's posted prices. The firing chosen here is also the default for new pieces.</p>
+          </div>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="slip">
+          <div class="slip-head">
+            <h2>Firing slip</h2>
+            <span class="label" id="slipDate"></span>
+          </div>
+          <div class="field">
+            <label class="label" for="potter">Potter</label>
+            <input id="potter" type="text" placeholder="Your name or member number">
+          </div>
+          <div class="tblwrap" id="slipTable"></div>
+          <div class="toolbar">
+            <button class="btn small" id="copyBtn" type="button">Copy slip as text</button>
+            <button class="btn small" id="clearBtn" type="button">Clear slip</button>
+            <span id="clearConfirm" hidden style="display:inline-flex;gap:6px;align-items:center;font-size:13px">Remove every piece?
+              <button class="btn small" id="clearYes" type="button">Yes, clear</button>
+              <button class="btn small" id="clearNo" type="button">Keep</button>
+            </span>
+          </div>
+          <textarea id="copyfallback" hidden readonly aria-label="Slip text to copy"></textarea>
+          <p class="note">The slip is saved on this phone only. Paste the copied text into your studio's drop-off form or chat.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+/* ================= constants ================= */
+// ArUco DICT_4X4_50 inner 4x4 bits, row-major, MSB first, white = 1 (from OpenCV).
+const DICT4 = [46386,3994,13101,39238,21662,31181,40494,50418,65242,53078,63889,4519,3767,10767,9393,9790,18021,26112,27742,30383,34443,45099,52437,56706,65095,38001,44260,42324,8483,13423,17429,22450,40655,61643,2222,2345,6261,1279,3574,7258,5912,10792,12940,14514,9448,12011,11583,19300,20526,20499];
+const MM_IN = 25.4, IN3_PER_L = 61.0237;
+const FIRINGS = [
+  {id:'bisque', label:'Bisque · cone 04', rate:0.020},
+  {id:'c6',     label:'Glaze · cone 6 oxidation', rate:0.035},
+  {id:'c10',    label:'Glaze · cone 10 reduction', rate:0.045}
+];
+const $ = id => document.getElementById(id);
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem('ksm2.'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('ksm2.'+k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ================= small maths ================= */
+function solveLin(A,b){ // Gaussian elimination, partial pivot
+  const n=b.length, M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<n;c++){
+    let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    if(Math.abs(M[p][c])<1e-12) return null;
+    [M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<n;r++){ if(r===c) continue; const f=M[r][c]/M[c][c]; for(let k=c;k<=n;k++) M[r][k]-=f*M[c][k]; }
+  }
+  return M.map((r,i)=>r[n]/r[i]);
+}
+function homography(src,dst){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){ const [x,y]=src[i],[u,v]=dst[i];
+    A.push([x,y,1,0,0,0,-u*x,-u*y]); b.push(u);
+    A.push([0,0,0,x,y,1,-v*x,-v*y]); b.push(v); }
+  const h=solveLin(A,b); return h?[...h,1]:null;
+}
+function hApply(H,x,y){ const w=H[6]*x+H[7]*y+H[8]; return [(H[0]*x+H[1]*y+H[2])/w,(H[3]*x+H[4]*y+H[5])/w]; }
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+function polyArea(p){ let s=0; for(let i=0;i<p.length;i++){ const a=p[i],b=p[(i+1)%p.length]; s+=a[0]*b[1]-b[0]*a[1]; } return Math.abs(s)/2; }
+function hull(pts){
+  pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[],up=[];
+  for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+  up.pop(); lo.pop(); return lo.concat(up);
+}
+function orderCW(q){ const cx=q.reduce((s,p)=>s+p[0],0)/4, cy=q.reduce((s,p)=>s+p[1],0)/4;
+  return q.slice().sort((a,b)=>Math.atan2(a[1]-cy,a[0]-cx)-Math.atan2(b[1]-cy,b[0]-cx)); }
+function quadFromHull(h){
+  const n=h.length; if(n<4) return null;
+  let best=-1,i1=0,i2=0;
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){ const d=(h[i][0]-h[j][0])**2+(h[i][1]-h[j][1])**2; if(d>best){best=d;i1=i;i2=j;} }
+  const a=h[i1],b=h[i2]; let mx=0,mn=0,p3=null,p4=null;
+  for(const p of h){ const c=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]); if(c>mx){mx=c;p3=p;} if(c<mn){mn=c;p4=p;} }
+  if(!p3||!p4) return null;
+  return orderCW([a,p3,b,p4]);
+}
+function samp(G,x,y){ const w=G.w,h=G.h,d=G.d;
+  if(x<0)x=0; if(y<0)y=0; if(x>w-1.001)x=w-1.001; if(y>h-1.001)y=h-1.001;
+  const x0=x|0,y0=y|0,fx=x-x0,fy=y-y0,i=y0*w+x0;
+  return d[i]*(1-fx)*(1-fy)+d[i+1]*fx*(1-fy)+d[i+w]*(1-fx)*fy+d[i+w+1]*fx*fy; }
+
+/* ================= image helpers ================= */
+function scaled(src,maxDim){
+  const k=Math.min(1,maxDim/Math.max(src.width,src.height));
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(src.width*k)); c.height=Math.max(1,Math.round(src.height*k));
+  const g=c.getContext('2d'); g.imageSmoothingQuality='high'; g.drawImage(src,0,0,c.width,c.height); return c;
+}
+function grayOf(c){
+  const px=c.getContext('2d',{willReadFrequently:true}).getImageData(0,0,c.width,c.height).data;
+  const n=c.width*c.height, d=new Float32Array(n);
+  for(let i=0;i<n;i++) d[i]=0.299*px[4*i]+0.587*px[4*i+1]+0.114*px[4*i+2];
+  return {w:c.width,h:c.height,d,px};
+}
+function label(bin,w,h){ // 4-connected components of bin==1
+  const lab=new Int32Array(w*h), stack=new Int32Array(w*h);
+  const area=[0],x0=[0],y0=[0],x1=[0],y1=[0]; let n=0;
+  for(let s=0;s<w*h;s++){
+    if(!bin[s]||lab[s]) continue;
+    n++; let sp=0; stack[sp++]=s; lab[s]=n; let a=0,ax0=w,ay0=h,ax1=0,ay1=0;
+    while(sp){ const p=stack[--sp]; a++; const x=p%w,y=(p/w)|0;
+      if(x<ax0)ax0=x; if(x>ax1)ax1=x; if(y<ay0)ay0=y; if(y>ay1)ay1=y;
+      if(x>0&&bin[p-1]&&!lab[p-1]){lab[p-1]=n;stack[sp++]=p-1;}
+      if(x<w-1&&bin[p+1]&&!lab[p+1]){lab[p+1]=n;stack[sp++]=p+1;}
+      if(y>0&&bin[p-w]&&!lab[p-w]){lab[p-w]=n;stack[sp++]=p-w;}
+      if(y<h-1&&bin[p+w]&&!lab[p+w]){lab[p+w]=n;stack[sp++]=p+w;} }
+    area.push(a); x0.push(ax0); y0.push(ay0); x1.push(ax1); y1.push(ay1);
+  }
+  return {lab,n,area,x0,y0,x1,y1};
+}
+
+/* ================= ArUco detection ================= */
+function decodeQuad(G,q){
+  const H=homography([[0,0],[6,0],[6,6],[0,6]],q); if(!H) return null;
+  const vals=[];
+  for(let r=0;r<6;r++) for(let c=0;c<6;c++){ let s=0;
+    for(const oy of [-.2,0,.2]) for(const ox of [-.2,0,.2]){ const [x,y]=hApply(H,c+.5+ox,r+.5+oy); s+=samp(G,x,y); }
+    vals.push(s/9); }
+  const mn=Math.min(...vals), mx=Math.max(...vals); if(mx-mn<30) return null;
+  const thr=(mn+mx)/2, bits=vals.map(v=>v>thr?1:0);
+  let bErr=0; for(let r=0;r<6;r++) for(let c=0;c<6;c++) if((r===0||r===5||c===0||c===5)&&bits[r*6+c]) bErr++;
+  if(bErr>1) return null;
+  let g=[]; for(let r=1;r<5;r++){ const row=[]; for(let c=1;c<5;c++) row.push(bits[r*6+c]); g.push(row); }
+  for(let k=0;k<4;k++){
+    let code=0; for(let r=0;r<4;r++) for(let c=0;c<4;c++) code=(code<<1)|g[r][c];
+    let bestId=-1,bestD=9;
+    for(let id=0;id<DICT4.length;id++){ let x=code^DICT4[id],d=0; while(x){d+=x&1;x>>=1;} if(d<bestD){bestD=d;bestId=id;} }
+    if(bestD<=1) return {id:bestId, ham:bestD, corners:[0,1,2,3].map(i=>q[(4-k+i)%4])};
+    g=g[0].map((_,c)=>g.map(row=>row[c]).reverse()); // rotate 90° clockwise
+  }
+  return null;
+}
+function detectMarkers(G){
+  const {w,h,d}=G, W=w+1, I=new Float64Array(W*(h+1));
+  for(let y=0;y<h;y++){ let s=0; for(let x=0;x<w;x++){ s+=d[y*w+x]; I[(y+1)*W+x+1]=I[y*W+x+1]+s; } }
+  for(const div of [30,14,60]){
+    const r=Math.max(5,Math.round(Math.min(w,h)/div)), bin=new Uint8Array(w*h);
+    for(let y=0;y<h;y++){ const ya=Math.max(0,y-r), yb=Math.min(h,y+r+1);
+      for(let x=0;x<w;x++){ const xa=Math.max(0,x-r), xb=Math.min(w,x+r+1);
+        const m=(I[yb*W+xb]-I[ya*W+xb]-I[yb*W+xa]+I[ya*W+xa])/((yb-ya)*(xb-xa));
+        bin[y*w+x]=d[y*w+x]<m-7?1:0; } }
+    const L=label(bin,w,h), cand=new Uint8Array(L.n+1), pts={};
+    for(let i=1;i<=L.n;i++){ const bw=L.x1[i]-L.x0[i]+1, bh=L.y1[i]-L.y0[i]+1, fill=L.area[i]/(bw*bh);
+      if(L.area[i]>=120&&bw>=12&&bh>=12&&bw<w*.9&&bh<h*.9&&bw/bh<4&&bh/bw<4&&fill>.15&&fill<.97){ cand[i]=1; pts[i]=[]; } }
+    const lab=L.lab;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const p=y*w+x, l=lab[p]; if(!l||!cand[l]) continue;
+      if(x===0||y===0||x===w-1||y===h-1||lab[p-1]!==l||lab[p+1]!==l||lab[p-w]!==l||lab[p+w]!==l) pts[l].push([x,y]); }
+    const found=[];
+    for(const k in pts){ const hl=hull(pts[k]); const q=quadFromHull(hl); if(!q) continue;
+      const qa=polyArea(q), ha=polyArea(hl); if(qa<100||qa/ha<.88) continue;
+      const sides=[0,1,2,3].map(i=>dist(q[i],q[(i+1)%4])); if(Math.min(...sides)<10||Math.max(...sides)/Math.min(...sides)>3) continue;
+      const m=decodeQuad(G,q); if(m){ m.area=qa; found.push(m); } }
+    if(found.length) return found;
+  }
+  return [];
+}
+function refineCorners(G,c){
+  const cen=[c.reduce((s,p)=>s+p[0],0)/4, c.reduce((s,p)=>s+p[1],0)/4], lines=[];
+  for(let i=0;i<4;i++){
+    const a=c[i], b=c[(i+1)%4], L=dist(a,b), ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L;
+    let nx=uy, ny=-ux; const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+    if(nx*(mid[0]-cen[0])+ny*(mid[1]-cen[1])<0){ nx=-nx; ny=-ny; }
+    const R=Math.max(3,.07*L), st=.5, P=[];
+    for(let t=.12;t<=.881;t+=.035){ const px=a[0]+(b[0]-a[0])*t, py=a[1]+(b[1]-a[1])*t;
+      const gr=[]; for(let s=-R;s<=R;s+=st) gr.push(samp(G,px+nx*(s+st/2),py+ny*(s+st/2))-samp(G,px+nx*(s-st/2),py+ny*(s-st/2)));
+      let j=0; for(let k=1;k<gr.length;k++) if(gr[k]>gr[j]) j=k;
+      if(gr[j]<12||j===0||j===gr.length-1) continue;
+      const den=gr[j-1]-2*gr[j]+gr[j+1], off=den<0?.5*(gr[j-1]-gr[j+1])/den:0;
+      const s=-R+(j+off)*st; P.push([px+nx*s,py+ny*s]); }
+    if(P.length<8) return c;
+    const mx=P.reduce((s,p)=>s+p[0],0)/P.length, my=P.reduce((s,p)=>s+p[1],0)/P.length;
+    let sxx=0,syy=0,sxy=0; for(const p of P){ const dx=p[0]-mx,dy=p[1]-my; sxx+=dx*dx; syy+=dy*dy; sxy+=dx*dy; }
+    const th=.5*Math.atan2(2*sxy,sxx-syy); lines.push({p:[mx,my],d:[Math.cos(th),Math.sin(th)]});
+  }
+  const out=[];
+  for(let i=0;i<4;i++){ const l1=lines[(i+3)%4], l2=lines[i];
+    const den=l1.d[0]*l2.d[1]-l1.d[1]*l2.d[0]; if(Math.abs(den)<1e-6) return c;
+    const t=((l2.p[0]-l1.p[0])*l2.d[1]-(l2.p[1]-l1.p[1])*l2.d[0])/den;
+    const q=[l1.p[0]+t*l1.d[0], l1.p[1]+t*l1.d[1]];
+    if(dist(q,c[i])>Math.max(3,.08*dist(c[i],c[(i+1)%4]))) return c;
+    out.push(q); }
+  return out;
+}
+
+/* ================= pot segmentation ================= */
+function morph(m,w,h,dil,it){
+  let a=m;
+  for(let k=0;k<it;k++){ const t=new Uint8Array(w*h), o=new Uint8Array(w*h);
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const p=y*w+x; const l=x>0?a[p-1]:a[p], r=x<w-1?a[p+1]:a[p];
+      t[p]=dil?(a[p]|l|r):(a[p]&l&r); }
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const p=y*w+x; const u=y>0?t[p-w]:t[p], d=y<h-1?t[p+w]:t[p];
+      o[p]=dil?(t[p]|u|d):(t[p]&u&d); }
+    a=o; }
+  return a;
+}
+function segmentPot(S,zone,tol){
+  const {w,h,px}=S, band=Math.max(4,Math.round(Math.min(w,h)*.04));
+  const inZone=(x,y)=>x>=zone[0]&&x<=zone[2]&&y>=zone[1]&&y<=zone[3];
+  let smp=[];
+  for(let y=0;y<h;y+=2) for(let x=0;x<w;x+=2){
+    if(!(x<band||x>=w-band||y<band||y>=h-band)) continue; if(inZone(x,y)) continue;
+    const i=4*(y*w+x); smp.push([x/w,y/h,px[i],px[i+1],px[i+2]]); }
+  const fit=S=>{ const coef=[]; for(let ch=0;ch<3;ch++){ const A=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], b=[0,0,0,0];
+      for(const s of S){ const f=[1,s[0],s[1],s[0]*s[1]]; for(let i=0;i<4;i++){ b[i]+=f[i]*s[2+ch]; for(let j=0;j<4;j++) A[i][j]+=f[i]*f[j]; } }
+      coef.push(solveLin(A,b)||[S.reduce((a,s)=>a+s[2+ch],0)/S.length,0,0,0]); } return coef; };
+  const pred=(C,x,y)=>C.map(c=>c[0]+c[1]*x+c[2]*y+c[3]*x*y);
+  const D=(r,g,b,p)=>{ const dr=r-p[0],dg=g-p[1],db=b-p[2], dY=.299*dr+.587*dg+.114*db; return Math.hypot(.5*dY, db-dY, dr-dY); };
+  let C=fit(smp);
+  let res=smp.map(s=>D(s[2],s[3],s[4],pred(C,s[0],s[1]))), sorted=res.slice().sort((a,b)=>a-b);
+  const cut=sorted[Math.floor(sorted.length*.8)]; smp=smp.filter((s,i)=>res[i]<=cut); C=fit(smp);
+  res=smp.map(s=>D(s[2],s[3],s[4],pred(C,s[0],s[1]))).sort((a,b)=>a-b);
+  const p95=res[Math.floor(res.length*.95)]||4, T=Math.max(10,p95*tol*1.6);
+  let m=new Uint8Array(w*h);
+  for(let y=0;y<h;y++){ const yy=y/h; for(let x=0;x<w;x++){ const i=y*w+x, p=pred(C,x/w,yy);
+    m[i]=D(px[4*i],px[4*i+1],px[4*i+2],p)>T?1:0; } }
+  m=morph(morph(m,w,h,true,2),w,h,false,2);   // close
+  m=morph(morph(m,w,h,false,1),w,h,true,1);   // open
+  // fill holes
+  const bg=new Uint8Array(w*h), st=new Int32Array(w*h); let sp=0;
+  const push=p=>{ if(!m[p]&&!bg[p]){ bg[p]=1; st[sp++]=p; } };
+  for(let x=0;x<w;x++){ push(x); push((h-1)*w+x); } for(let y=0;y<h;y++){ push(y*w); push(y*w+w-1); }
+  while(sp){ const p=st[--sp], x=p%w; if(x>0)push(p-1); if(x<w-1)push(p+1); if(p>=w)push(p-w); if(p<w*(h-1))push(p+w); }
+  for(let i=0;i<w*h;i++) if(!bg[i]) m[i]=1;
+  const L=label(m,w,h), zoneL=new Set();
+  for(let y=Math.max(0,zone[1]|0);y<=Math.min(h-1,zone[3]|0);y++) for(let x=Math.max(0,zone[0]|0);x<=Math.min(w-1,zone[2]|0);x++){ const l=L.lab[y*w+x]; if(l) zoneL.add(l); }
+  const cands=[]; for(let i=1;i<=L.n;i++) if(!zoneL.has(i)&&L.area[i]>=w*h*.003) cands.push(i);
+  if(!cands.length) return {ok:false, touchesCard: [...zoneL].some(l=>L.area[l]>w*h*.02)};
+  const maxA=Math.max(...cands.map(i=>L.area[i])), lab=L.lab;
+  const pots=cands.filter(i=>L.area[i]>=maxA*.06).map(id=>{
+    const pts=[];
+    for(let y=L.y0[id];y<=L.y1[id];y++) for(let x=L.x0[id];x<=L.x1[id];x++){ const p=y*w+x; if(lab[p]!==id) continue;
+      if(x===0||y===0||x===w-1||y===h-1||lab[p-1]!==id||lab[p+1]!==id||lab[p-w]!==id||lab[p+w]!==id) pts.push([x,y]); }
+    return {id, pts, edge:L.x0[id]<=1||L.y0[id]<=1||L.x1[id]>=w-2||L.y1[id]>=h-2, bbox:[L.x0[id],L.y0[id],L.x1[id],L.y1[id]], area:L.area[id]};
+  }).sort((a,b)=>(a.bbox[0]+a.bbox[2])-(b.bbox[0]+b.bbox[2]));
+  const nearCard=[...zoneL].some(l=>L.area[l]>maxA*.5);
+  return {ok:true, lab, pots, nearCard};
+}
+
+/* ================= full analysis of one photo ================= */
+function analyze(work){
+  const cfg=settings();
+  const det=scaled(work,1000), GD=grayOf(det);
+  let ms=detectMarkers(GD);
+  const allIds=[...new Set(ms.map(m=>m.id))];
+  if(cfg.id!=='any') ms=ms.filter(m=>m.id===+cfg.id);
+  if(!ms.length) return {ok:false, stage:'marker', ids:allIds};
+  const m=ms.sort((a,b)=>b.area-a.area)[0];
+  const f=work.width/det.width;
+  const GW=grayOf(work);
+  let corners=m.corners.map(p=>[(p[0]+.5)*f-.5,(p[1]+.5)*f-.5]);
+  corners=refineCorners(GW,corners);
+  const S=cfg.size, plane=[[0,0],[S,0],[S,S],[0,S]];
+  const H=homography(corners,plane), Hi=homography(plane,corners);
+  const side=[0,1,2,3].map(i=>dist(corners[i],corners[(i+1)%4])), sidePx=side.reduce((a,b)=>a+b)/4;
+  const up=[corners[3][0]-corners[0][0], corners[3][1]-corners[0][1]];
+  const tilt=Math.abs(Math.atan2(up[0],up[1])*180/Math.PI);
+  const segC=scaled(work,900), SG=grayOf(segC), fs=work.width/segC.width;
+  const sc=corners.map(p=>[p[0]/fs,p[1]/fs]), mxs=Math.max(...side)/fs, pad=.25*mxs;
+  const zone=[Math.min(...sc.map(p=>p[0]))-pad, Math.min(...sc.map(p=>p[1]))-pad, Math.max(...sc.map(p=>p[0]))+pad, Math.max(...sc.map(p=>p[1]))+pad];
+  const seg=segmentPot(SG,zone,cfg.tol);
+  const base={marker:{id:m.id,corners,sidePx,tilt,ham:m.ham}, H, Hi, fs, segSize:[segC.width,segC.height], zone};
+  if(!seg.ok) return {...base, ok:false, stage:'pot', touchesCard:seg.touchesCard};
+  const pots=seg.pots.map(pt=>{
+    let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+    for(const [x,y] of pt.pts) for(const [dx,dy] of [[0,0],[1,0],[0,1],[1,1]]){
+      const [u,v]=hApply(H,(x+dx)*fs-.5,(y+dy)*fs-.5);
+      if(u<x0)x0=u; if(u>x1)x1=u; if(v<y0)y0=v; if(v>y1)y1=v; }
+    return {...pt, wMm:x1-x0, hMm:y1-y0, boxImg:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(p=>hApply(Hi,p[0],p[1]))};
+  });
+  return {...base, ok:true, seg, pots};
+}
+
+/* ================= sample scene ================= */
+// Three pieces on the marker line. True sizes (W×H mm): vase 120×160, mug 105×95 (with handle), bowl 150×70.
+function makeSample(){
+  const W=1800,H=1200,s=3,floorY=1010; // px per mm on the marker line
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  let gr=g.createLinearGradient(0,0,0,H); gr.addColorStop(0,'#1f4f98'); gr.addColorStop(.75,'#2b62b3'); gr.addColorStop(1,'#3a73c2');
+  g.fillStyle=gr; g.fillRect(0,0,W,H);
+  gr=g.createRadialGradient(W*.45,H*.5,100,W*.45,H*.5,W*.8); gr.addColorStop(0,'rgba(255,255,255,.06)'); gr.addColorStop(1,'rgba(0,0,0,.18)');
+  g.fillStyle=gr; g.fillRect(0,0,W,H);
+  const smooth=(arr,cont)=>{ cont?g.lineTo(arr[0][0],arr[0][1]):g.moveTo(arr[0][0],arr[0][1]);
+    for(let i=1;i<arr.length-1;i++){ const mx=(arr[i][0]+arr[i+1][0])/2,my=(arr[i][1]+arr[i+1][1])/2; g.quadraticCurveTo(arr[i][0],arr[i][1],mx,my); }
+    g.lineTo(arr[arr.length-1][0],arr[arr.length-1][1]); };
+  const shade=(cx,rmax,cols)=>{ const q=g.createLinearGradient(cx-rmax*s,0,cx+rmax*s,0); cols.forEach((c,i)=>q.addColorStop(i/(cols.length-1),c)); return q; };
+  function pot(cx,prof,glaze,foot,inner){
+    const rmax=Math.max(...prof.map(p=>p[1])), top=floorY-prof[prof.length-1][0]*s, rTop=prof[prof.length-1][1];
+    g.save(); g.filter='blur(8px)'; g.fillStyle='rgba(0,20,60,.3)'; g.beginPath(); g.ellipse(cx,floorY+3,rmax*s*.9,10,0,0,Math.PI*2); g.fill(); g.restore();
+    const R=prof.map(([y,r])=>[cx+r*s,floorY-y*s]), Lf=prof.slice().reverse().map(([y,r])=>[cx-r*s,floorY-y*s]);
+    g.save(); g.beginPath(); smooth(R); smooth(Lf,true); g.closePath(); g.fillStyle=shade(cx,rmax,glaze); g.fill(); g.clip();
+    g.fillStyle=shade(cx,rmax,foot); g.beginPath(); g.moveTo(0,floorY-8*s); for(let x=0;x<=W;x+=20) g.lineTo(x,floorY-8*s+Math.sin(x/37)*4); g.lineTo(W,H); g.lineTo(0,H); g.fill();
+    g.restore();
+    const ry=Math.max(5,rTop*s*.12); g.fillStyle=inner; g.beginPath(); g.ellipse(cx,top+ry+1,rTop*s*.94,ry,0,0,Math.PI*2); g.fill();
+  }
+  // vase 120 wide, 160 tall
+  pot(260,[[0,28],[4,30],[12,40],[32,54],[55,60],[76,58],[98,48],[120,32],[134,24],[148,26],[157,31],[160,32]],
+      ['#5d6a3a','#b8b57a','#d9d2a0','#4a5230'],['#7d5b40','#c99a72','#644631'],'#2f2a1c');
+  // mug: body 80 wide, 95 tall, handle to the right reaching 105 total width
+  const mx=640;
+  g.strokeStyle='#d7d0c0'; g.lineWidth=7*s; g.lineCap='round';
+  g.beginPath(); g.moveTo(mx+36*s,floorY-72*s); g.bezierCurveTo(mx+68*s,floorY-72*s,mx+68*s,floorY-24*s,mx+36*s,floorY-24*s); g.stroke();
+  pot(mx,[[0,36],[3,38],[8,40],[50,40],[90,40],[95,40]],['#b9b1a0','#efe8d8','#f7f2e6','#a39b8a'],['#8d6d52','#c79c78','#6f533e'],'#6b6255');
+  // bowl 150 wide, 70 tall
+  pot(1090,[[0,28],[3,30],[8,36],[22,54],[40,66],[58,73],[70,75]],['#1c120c','#5a3a24','#7a4f30','#150d08'],['#6f533e','#b38a66','#5a4230'],'#140c07');
+  // marker card on a stand, same line, slightly rotated
+  const cardW=100*s, cardH=122*s, ccx=1560, ccy=floorY-60*s-cardH/2;
+  g.fillStyle='#2a2a2a'; g.fillRect(ccx-5,ccy+cardH/2-10,10,floorY-(ccy+cardH/2)+2); g.fillRect(ccx-55,floorY-9,110,10);
+  g.save(); g.translate(ccx,ccy); g.rotate(-2.5*Math.PI/180);
+  g.fillStyle='#f4f4f1'; g.fillRect(-cardW/2,-cardH/2,cardW,cardH);
+  const ms=80*s, cell=ms/6, mx0=-ms/2, my0=-cardH/2+10*s, code=DICT4[7];
+  g.fillStyle='#111'; g.fillRect(mx0,my0,ms,ms); g.fillStyle='#f4f4f1';
+  for(let r=0;r<4;r++) for(let cc=0;cc<4;cc++) if((code>>(15-(r*4+cc)))&1) g.fillRect(mx0+(cc+1)*cell,my0+(r+1)*cell,cell+.5,cell+.5);
+  g.fillStyle='#333'; g.font=`600 ${Math.round(6*s)}px system-ui,sans-serif`; g.textAlign='center';
+  g.fillText('↑ UP · ID 7 · 80 mm',0,cardH/2-9*s);
+  g.restore();
+  const im=g.getImageData(0,0,W,H), d=im.data; let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  for(let i=0;i<d.length;i+=4){ const n=(rnd()-.5)*10; d[i]+=n; d[i+1]+=n; d[i+2]+=n; }
+  g.putImageData(im,0,0);
+  return c;
+}
+
+/* ================= state & UI ================= */
+let unit=store.get('unit','in');
+let rates=store.get('rates',Object.fromEntries(FIRINGS.map(f=>[f.id,f.rate])));
+let slip=store.get('slip',null);
+const views={front:null, side:null}; // {canvas, result, sample}
+let cur='front';
+function settings(){ return {size:parseFloat($('mSize').value)||80, id:$('mId').value, tol:parseFloat($('tol').value)||2}; }
+
+const mIdSel=$('mId');
+{ const o=document.createElement('option'); o.value='any'; o.textContent='Any 4×4 marker'; mIdSel.append(o);
+  for(let i=0;i<50;i++){ const o=document.createElement('option'); o.value=String(i); o.textContent='ID '+i; mIdSel.append(o); } }
+$('mSize').value=store.get('mSize',80); mIdSel.value=store.get('mId','any'); $('tol').value=store.get('tol',2);
+$('tolVal').textContent='×'+(+$('tol').value).toFixed(1);
+const rerun=()=>{ for(const k of ['front','side']) if(views[k]) views[k].result=analyze(views[k].canvas); refresh(); };
+let rerunT; const rerunSoon=()=>{ clearTimeout(rerunT); rerunT=setTimeout(rerun,250); };
+$('mSize').oninput=()=>{ store.set('mSize',parseFloat($('mSize').value)||80); rerunSoon(); };
+mIdSel.onchange=()=>{ store.set('mId',mIdSel.value); rerun(); };
+$('tol').oninput=()=>{ store.set('tol',+$('tol').value); $('tolVal').textContent='×'+(+$('tol').value).toFixed(1); rerunSoon(); };
+
+function setView(v){ cur=v; $('vFront').setAttribute('aria-pressed',v==='front'); $('vSide').setAttribute('aria-pressed',v==='side');
+  $('shootLbl').textContent = v==='front' ? 'Photograph front view' : 'Photograph side view'; refresh(); }
+$('vFront').onclick=()=>setView('front'); $('vSide').onclick=()=>setView('side');
+$('clearViewBtn').onclick=()=>{ views.side=null; refresh(); };
+
+function process(canvas, sample){
+  $('busy').hidden=false;
+  setTimeout(()=>{ const work=scaled(canvas,2400);
+    views[cur]={canvas:work, sample, result:analyze(work)}; $('busy').hidden=true;
+    const r=views[cur].result;
+    if(cur==='front') resetMeta(r.ok?r.pots.length:0, sample?SAMPLE_NAMES:null);
+    refresh();
+    toast(r.ok?`Measured ${plural(r.pots.length,'piece')}`:'Could not measure. See the checks under the photo.'); },30);
+}
+const SAMPLE_NAMES=['Celadon vase','Mug','Tenmoku bowl'];
+let meta=[];
+function resetMeta(n,names){ const f=$('firing').value; meta=Array.from({length:n},(_,i)=>({name:(names&&names[i])||'',firing:f,round:true,depthMm:null,qty:1})); }
+function syncMeta(){ const F=views.front&&views.front.result, n=F&&F.ok?F.pots.length:0; if(meta.length!==n) resetMeta(n,meta.map(m=>m.name)); }
+$('sampleBtn').onclick=()=>{ setView('front'); views.side=null; process(makeSample(),true); };
+$('file').onchange=e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const url=URL.createObjectURL(f), im=new Image();
+  im.onload=()=>{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; c.getContext('2d').drawImage(im,0,0); URL.revokeObjectURL(url);
+    if(cur==='front') views.side=null;
+    process(c,false); };
+  im.onerror=()=>toast('That file could not be opened as an image. Try a JPG or PNG.');
+  im.src=url; e.target.value='';
+};
+
+/* ---------- drawing ---------- */
+const cv=$('cv'), ctx=cv.getContext('2d');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let overlayCache=new WeakMap();
+function maskOverlay(v){
+  if(overlayCache.has(v.result)) return overlayCache.get(v.result);
+  const r=v.result, [w,h]=r.segSize, c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d'), im=g.createImageData(w,h), d=im.data, lab=r.seg.lab, ids=new Set(r.pots.map(p=>p.id));
+  for(let i=0;i<w*h;i++) if(ids.has(lab[i])){ d[4*i]=240; d[4*i+1]=180; d[4*i+2]=40; d[4*i+3]=70; }
+  for(const p of r.pots) for(const [x,y] of p.pts){ const i=y*w+x; d[4*i]=255; d[4*i+1]=196; d[4*i+2]=40; d[4*i+3]=255; }
+  g.putImageData(im,0,0); overlayCache.set(v.result,c); return c;
+}
+function draw(){
+  const v=views[cur];
+  $('emptyView').hidden=!!v || cur==='front'; cv.hidden=!v; $('badge').hidden=!(v&&v.sample);
+  if(!v) return;
+  const stage=$('stage'), W=v.canvas.width, Hh=v.canvas.height;
+  const sc=Math.min(stage.clientWidth/W, Math.max(260,window.innerHeight*.62)/Hh), dpr=window.devicePixelRatio||1;
+  const w=Math.round(W*sc), h=Math.round(Hh*sc);
+  cv.style.width=w+'px'; cv.style.height=h+'px'; cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const S=sc*dpr; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(v.canvas,0,0,cv.width,cv.height);
+  const r=v.result; if(!r) return;
+  const REF=css('--ref'), POT=css('--pot');
+  if(r.ok){ ctx.imageSmoothingEnabled=false; ctx.drawImage(maskOverlay(v),0,0,cv.width,cv.height); ctx.imageSmoothingEnabled=true;
+    r.pots.forEach((pt,i)=>{
+      const b=pt.boxImg.map(p=>[p[0]*S,p[1]*S]);
+      ctx.setLineDash([8*dpr,6*dpr]); ctx.lineWidth=2*dpr; ctx.strokeStyle='#fff'; poly(b); ctx.stroke(); ctx.setLineDash([]);
+      const tx=(b[0][0]+b[1][0])/2, ty=Math.min(b[0][1],b[1][1])-16*dpr;
+      ctx.beginPath(); ctx.arc(tx,Math.max(14*dpr,ty),12*dpr,0,Math.PI*2); ctx.fillStyle=POT; ctx.fill(); ctx.lineWidth=2*dpr; ctx.strokeStyle='#fff'; ctx.stroke();
+      ctx.fillStyle='#1D2824'; ctx.font=`700 ${13*dpr}px "IBM Plex Mono", monospace`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(i+1),tx,Math.max(14*dpr,ty)+1); ctx.textAlign='left';
+      const lbl=`${fmt(toU(pt.wMm))} × ${fmt(toU(pt.hMm))}`; ctx.font=`600 ${12*dpr}px "IBM Plex Mono", monospace`;
+      if(ctx.measureText(lbl).width+14*dpr < Math.abs(b[2][0]-b[3][0])+8*dpr) tag(lbl,(b[2][0]+b[3][0])/2,Math.max(b[2][1],b[3][1])+16*dpr,POT);
+    }); }
+  if(r.marker){ const q=r.marker.corners.map(p=>[p[0]*S,p[1]*S]);
+    ctx.lineWidth=3*dpr; ctx.strokeStyle=REF; poly(q); ctx.stroke();
+    ctx.fillStyle=REF; ctx.beginPath(); ctx.arc(q[0][0],q[0][1],5*dpr,0,Math.PI*2); ctx.fill();
+    tag('ID '+r.marker.id+' · '+settings().size+' mm',(q[0][0]+q[1][0])/2,Math.min(q[0][1],q[1][1])-14*dpr,REF); }
+}
+function poly(p){ ctx.beginPath(); p.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1])); ctx.closePath(); }
+function tag(t,x,y,col,align='center'){ const dpr=window.devicePixelRatio||1;
+  ctx.font=`600 ${12*dpr}px "IBM Plex Mono", monospace`; const w=ctx.measureText(t).width+10*dpr, h=18*dpr;
+  let lx=align==='center'?x-w/2:x; lx=Math.max(2,Math.min(cv.width-w-2,lx)); const ly=Math.max(2,Math.min(cv.height-h-2,y-h/2));
+  ctx.fillStyle='rgba(0,0,0,.75)'; ctx.fillRect(lx,ly,w,h); ctx.fillStyle=col; ctx.textBaseline='middle'; ctx.fillText(t,lx+5*dpr,ly+h/2); }
+new ResizeObserver(()=>draw()).observe($('stage'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------- checks list ---------- */
+const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
+function checksFor(r,which){
+  const L=[];
+  if(!r) return L;
+  if(!r.marker){ L.push(['bad', r.ids&&r.ids.length ? `Found marker ID ${r.ids.join(', ')}, but the booth is set to ID ${$('mId').value}.` : 'No ArUco marker found. Make sure the whole card is in frame, in focus, and not in glare.']); return L; }
+  const mk=r.marker, mmPerPx=settings().size/mk.sidePx;
+  L.push(['ok', `Marker ID ${mk.id} found`, `${Math.round(mk.sidePx)} px across · ${mmPerPx.toFixed(2)} mm per pixel`]);
+  if(mk.sidePx<60) L.push(['warn','The marker is small in the photo. Move the phone closer or print a larger marker.']);
+  if(mk.tilt>25) L.push(['warn',`The marker is rotated ${Math.round(mk.tilt)}°. Mount the card with its UP arrow on top, or hold the phone level.`]);
+  if(!r.ok){ L.push(['bad', r.touchesCard ? 'A piece seems to touch the marker card. Leave at least 5 cm between them.' : 'No pieces found against the backdrop. Check the lighting, or raise the backdrop tolerance in Studio settings.']); return L; }
+  L.push(['ok',`${plural(r.pots.length,'piece')} traced`,'numbered left to right']);
+  r.pots.forEach((p,i)=>{
+    if(p.edge) L.push(['warn',`Piece ${i+1} touches the edge of the photo, so part of it may be cut off. Step back and retake.`]);
+    if(p.hMm<15||p.wMm<15) L.push(['warn',`Piece ${i+1} measures under 15 mm. If it's a crumb or stray shadow, clear it away and retake.`]); });
+  if(r.pots.some(p=>p.wMm>2.2*p.hMm&&p.wMm>200)) L.push(['warn','One outline is unusually wide. Two pieces standing too close are counted as one, so leave about 2 cm between them.']);
+  if(which==='side'){ const F=views.front&&views.front.result;
+    if(F&&F.ok&&F.pots.length!==r.pots.length) L.push(['warn',`The side view shows ${plural(r.pots.length,'piece')} but the front view shows ${F.pots.length}. Keep the same pieces in the same order, each turned a quarter turn in place.`]); }
+  return L;
+}
+function renderChecks(){
+  const v=views[cur], ul=$('checks'); ul.innerHTML='';
+  const L=v?checksFor(v.result,cur):[];
+  for(const [k,t,sub] of L){ const li=document.createElement('li'); li.innerHTML=`<i class="dot ${k}"></i><span>${t}${sub?` <span class="num">· ${sub}</span>`:''}</span>`; ul.append(li); }
+  for(const k of ['front','side']){ const v=views[k], dot=$(k==='front'?'dFront':'dSide'), s=$(k==='front'?'sFront':'sSide');
+    if(!v){ dot.className='dot'; s.textContent=k==='front'?'No photo':'Turn each piece 90°'; continue; }
+    const r=v.result; if(r.ok){ const warn=checksFor(r,k).some(c=>c[0]!=='ok'); dot.className='dot '+(warn?'warn':'ok'); s.textContent=plural(r.pots.length,'piece')+' measured'; }
+    else { dot.className='dot bad'; s.textContent=r.stage==='marker'?'Marker not found':'No pieces found'; } }
+  $('clearViewBtn').hidden=!(cur==='side'&&views.side);
+}
+
+/* ---------- measurement maths ---------- */
+const toU=mm=>unit==='in'?mm/MM_IN:mm/10;
+const fromU=v=>unit==='in'?v*MM_IN:v*10;
+const step=()=>unit==='in'?.5:1;
+const up=v=>$('roundUp').checked?Math.ceil(v/step()-1e-9)*step():v;
+function fmt(v){ return unit==='in'?v.toFixed(2).replace(/0$/,'').replace(/\.0$/,''):v.toFixed(1).replace(/\.0$/,''); }
+function frontOk(){ const F=views.front&&views.front.result; return F&&F.ok?F:null; }
+function sidePots(){ const F=frontOk(), S=views.side&&views.side.result; if(!F||!S||!S.ok) return null; return S.pots.length===F.pots.length?S.pots:null; }
+function pieceDims(i){
+  const p=frontOk().pots[i], m=meta[i], sp=sidePots(), sd=sp?sp[i]:null;
+  const hMm=sd?Math.max(p.hMm,sd.hMm):p.hMm, wMm=p.wMm, dMm=sd?sd.wMm:(m.round?wMm:(m.depthMm||0));
+  const hRaw=toU(hMm), wRaw=toU(wMm), dRaw=toU(dMm);
+  return {hRaw,wRaw,dRaw,h:up(hRaw),w:up(wRaw),d:up(dRaw),src:sd?'side':m.round?'round':'entered'};
+}
+const money=v=>'$'+v.toFixed(2);
+function volIn3(d){ return unit==='in'?d.h*d.w*d.d:(d.h*d.w*d.d)/1000*IN3_PER_L; }
+function feeFor(v3,f){ const fee=v3*(rates[f]||0), min=parseFloat($('minFee').value)||0; return {fee:Math.round(Math.max(fee,min)*100)/100,atMin:fee<min}; }
+function renderPieces(){
+  const el=$('pieces'); el.innerHTML=''; const F=frontOk();
+  if(!F){ el.innerHTML=`<p class="empty">${views.front?'Fix the front view to get measurements.':'Take a front-view photo in the booth to start.'}</p>`; updatePieces(); return; }
+  F.pots.forEach((p,i)=>{
+    const m=meta[i], d=document.createElement('div'); d.className='piece';
+    d.innerHTML=`<div class="phead"><span class="pnum" aria-hidden="true">${i+1}</span><input type="text" id="pn${i}" aria-label="Name of piece ${i+1}" placeholder="Piece ${i+1} name"><span class="pfee" id="pf${i}"></span></div>
+      <div class="pdims" id="pd${i}"></div>
+      <div class="popts"><label class="qty" for="pq${i}"><span class="label">Qty</span><input type="number" id="pq${i}" min="1" max="999" step="1" inputmode="numeric"></label><select id="pfi${i}" aria-label="Firing for piece ${i+1}"></select>
+        <label class="check" id="prl${i}"><input type="checkbox" id="pr${i}"><span>Round: depth equals width</span></label>
+        <input type="number" id="pdep${i}" min="0" step="0.1" aria-label="Depth of piece ${i+1}"></div>`;
+    el.append(d);
+    const nm=$('pn'+i); nm.value=m.name; nm.oninput=()=>{ m.name=nm.value; };
+    const fs=$('pfi'+i); FIRINGS.forEach(f=>{ const o=document.createElement('option'); o.value=f.id; o.textContent=f.label; fs.append(o); });
+    fs.value=m.firing; fs.onchange=()=>{ m.firing=fs.value; updatePieces(); };
+    const rd=$('pr'+i); rd.checked=m.round; rd.onchange=()=>{ m.round=rd.checked; if(!m.round&&m.depthMm==null) m.depthMm=p.wMm; updatePieces(); };
+    const qt=$('pq'+i); qt.value=m.qty; qt.oninput=()=>{ const v=Math.floor(+qt.value); m.qty=v>=1?Math.min(v,999):1; updatePieces(); };
+    qt.onblur=()=>{ qt.value=m.qty; };
+    const dp=$('pdep'+i); dp.oninput=()=>{ const v=parseFloat(dp.value); m.depthMm=v>0?fromU(v):0; updatePieces(); };
+  });
+  updatePieces();
+}
+function updatePieces(){
+  const F=frontOk(), n=F?F.pots.length:0, items=F?meta.reduce((a,m)=>a+(m.qty||1),0):0;
+  $('piecesTitle').textContent=n?`${plural(n,'piece')} in this photo`:'Pieces in this photo';
+  $('addBtn').textContent=items>1?`Add ${plural(items,'item')} to firing slip`:'Add to firing slip'; $('addBtn').disabled=!n;
+  if(!F){ $('oVol').textContent='–'; $('oCost').textContent='–'; $('oExplain').textContent=''; return; }
+  const sp=sidePots(); let tv=0, tf=0;
+  F.pots.forEach((p,i)=>{
+    const q=meta[i].qty||1, d=pieceDims(i), v3=volIn3(d), {fee,atMin}=feeFor(v3,meta[i].firing); tv+=v3*q; tf+=fee*q;
+    $('pf'+i).textContent=money(fee*q);
+    const src=d.src==='side'?'depth from side view':d.src==='round'?'depth = width':'depth entered';
+    $('pd'+i).innerHTML=`<span class="num">${fmt(d.h)} × ${fmt(d.w)} × ${fmt(d.d)} ${unit}</span><span class="num">${volStr({vol:v3})}${q>1?' each':''}</span>${q>1?`<span class="raw">${q} × ${money(fee)}${atMin?' minimum fee':''}</span>`:atMin?'<span class="raw">minimum fee</span>':''}<span class="raw">H × W × D · ${src}${$('roundUp').checked?` · measured ${fmt(d.hRaw)} × ${fmt(d.wRaw)}`:''}</span>`;
+    $('prl'+i).hidden=!!sp; const dp=$('pdep'+i); dp.hidden=!!sp||meta[i].round; dp.placeholder=`Depth (${unit})`;
+    if(document.activeElement!==dp&&meta[i].depthMm!=null) dp.value=fmt(toU(meta[i].depthMm));
+  });
+  $('oVol').innerHTML=(unit==='in'?Math.round(tv).toLocaleString()+' <em>in³ total</em>':(tv/IN3_PER_L).toFixed(2)+' <em>litres total</em>');
+  $('oCost').textContent=money(tf);
+  const S=views.side&&views.side.result;
+  $('oExplain').textContent=sp?'Each depth comes from the side view.':(S&&S.ok?'The side view shows a different number of pieces, so it is not used.':'Round pieces use their width as depth. Untick “Round” to enter a depth, or add a side view.');
+}
+function refresh(){ syncMeta(); draw(); renderChecks(); renderPieces(); }
+
+/* ---------- controls ---------- */
+FIRINGS.forEach(f=>{ const o=document.createElement('option'); o.value=f.id; o.textContent=f.label; $('firing').append(o); });
+$('firing').value=store.get('firing','c6'); $('minFee').value=(+store.get('minFee',1)).toFixed(2); $('potter').value=store.get('potter','');
+$('roundUp').onchange=updatePieces;
+function showRate(){ const r=rates[$('firing').value]; $('rate').value=unit==='in'?r.toFixed(3):(r*IN3_PER_L).toFixed(2); $('rate').step=unit==='in'?'0.001':'0.05'; $('rateUnit').textContent=unit==='in'?'in³':'litre'; }
+$('firing').onchange=()=>{ store.set('firing',$('firing').value); showRate(); };
+$('rate').oninput=()=>{ const v=parseFloat($('rate').value); if(!(v>=0)) return; rates[$('firing').value]=unit==='in'?v:v/IN3_PER_L; store.set('rates',rates); updatePieces(); };
+$('minFee').oninput=()=>{ store.set('minFee',parseFloat($('minFee').value)||0); updatePieces(); };
+$('potter').oninput=()=>store.set('potter',$('potter').value);
+function setUnit(u){ unit=u; store.set('unit',u);
+  $('uIn').setAttribute('aria-pressed',u==='in'); $('uCm').setAttribute('aria-pressed',u==='cm');
+  $('stepLbl').textContent=u==='in'?'½ in':'1 cm';
+  showRate(); refresh(); renderSlip(); }
+$('uIn').onclick=()=>setUnit('in'); $('uCm').onclick=()=>setUnit('cm');
+
+/* ---------- slip ---------- */
+$('slipDate').textContent=new Date().toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function dimStr(it){ const f=v=>unit==='in'?fmt(v):fmt(Math.round(v*25.4)/10); return `${f(it.h)}×${f(it.w)}×${f(it.d)} ${unit}`; }
+function volStr(it){ return unit==='in'?Math.round(it.vol).toLocaleString()+' in³':(it.vol/IN3_PER_L).toFixed(2)+' L'; }
+function renderSlip(){
+  const el=$('slipTable');
+  if(!slip.length){ el.innerHTML='<p class="empty">No pieces yet. Measure your work and tap “Add to firing slip”.</p>'; return; }
+  const Q=it=>it.qty||1, total=slip.reduce((s,i)=>s+i.fee*Q(i),0), vol=slip.reduce((s,i)=>s+i.vol*Q(i),0), count=slip.reduce((s,i)=>s+Q(i),0);
+  el.innerHTML=`<table><thead><tr><th>Piece</th><th class="r">Qty</th><th class="r">Space</th><th class="r">Fee</th><th></th></tr></thead><tbody>${
+    slip.map((it,i)=>`<tr><td>${esc(it.name)}<br><span class="note">${esc(FIRINGS.find(f=>f.id===it.firing)?.label||it.firing)}</span><br><span class="note num">${dimStr(it)}</span></td><td class="r"><span class="num">${Q(it)}</span></td><td class="r"><span class="num">${volStr({vol:it.vol*Q(it)})}</span></td><td class="r"><span class="num">${money(it.fee*Q(it))}</span>${Q(it)>1?`<br><span class="note">${money(it.fee)} each</span>`:''}</td><td class="r"><button class="x" data-i="${i}" aria-label="Remove ${esc(it.name)}">×</button></td></tr>`).join('')
+  }</tbody><tfoot><tr><td>Total</td><td class="r"><span class="num">${count}</span></td><td class="r"><span class="num">${volStr({vol})}</span></td><td class="r"><span class="num">${money(total)}</span></td><td></td></tr></tfoot></table>`;
+  el.querySelectorAll('.x').forEach(b=>b.onclick=()=>{ slip.splice(+b.dataset.i,1); store.set('slip',slip); renderSlip(); });
+}
+$('addBtn').onclick=()=>{
+  const F=frontOk(); if(!F){ toast('Take a front view that measures first.'); return; }
+  const toIn=v=>unit==='in'?v:v/2.54; let tot=0;
+  F.pots.forEach((p,i)=>{ const d=pieceDims(i), v3=volIn3(d), {fee}=feeFor(v3,meta[i].firing); tot+=fee;
+    const q=meta[i].qty||1; tot+=fee*(q-1);
+    slip.push({name:meta[i].name.trim()||`Piece ${slip.length+1}`,qty:q,firing:meta[i].firing,h:toIn(d.h),w:toIn(d.w),d:toIn(d.d),vol:v3,fee}); });
+  store.set('slip',slip); renderSlip(); toast(`Added ${plural(meta.reduce((a,m)=>a+(m.qty||1),0),'item')} · ${money(tot)}`);
+};
+function slipText(){
+  const lines=[`FIRING SLIP · ${$('slipDate').textContent}`,`Potter: ${$('potter').value||'(name)'}`,''];
+  const Q=it=>it.qty||1;
+  slip.forEach((it,i)=>lines.push(`${i+1}. ${it.name}${Q(it)>1?` ×${Q(it)}`:''} | ${FIRINGS.find(f=>f.id===it.firing)?.label} | ${dimStr(it)} = ${volStr(it)}${Q(it)>1?' each':''} | ${Q(it)>1?`${Q(it)} × ${money(it.fee)} = `:''}${money(it.fee*Q(it))}`));
+  lines.push('',`Total: ${slip.reduce((s,i)=>s+Q(i),0)} item(s), ${volStr({vol:slip.reduce((s,i)=>s+i.vol*Q(i),0)})}, ${money(slip.reduce((s,i)=>s+i.fee*Q(i),0))}`);
+  return lines.join('\n');
+}
+$('copyBtn').onclick=()=>{
+  if(!slip.length){ toast('The slip is empty.'); return; }
+  const t=slipText(), ta=$('copyfallback');
+  const fb=()=>{ ta.value=t; ta.hidden=false; ta.focus(); ta.select(); toast('Select all and copy the text below.'); };
+  try{ navigator.clipboard.writeText(t).then(()=>{ ta.hidden=true; toast('Slip copied'); },fb); }catch(e){ fb(); }
+};
+$('clearBtn').onclick=()=>{ if(slip.length) $('clearConfirm').hidden=false; };
+$('clearNo').onclick=()=>$('clearConfirm').hidden=true;
+$('clearYes').onclick=()=>{ slip=[]; store.set('slip',slip); renderSlip(); $('clearConfirm').hidden=true; toast('Slip cleared'); };
+let tt; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),2600); }
+
+/* ---------- boot ---------- */
+if(!slip) slip=[{name:'Example: mug',firing:'c6',h:4,w:5,d:3.5,vol:70,fee:2.45}];
+window.__ksm={analyze,views,pieceDims};
+setUnit(unit); renderSlip();
+views.front={canvas:scaled(makeSample(),2400),sample:true}; views.front.result=analyze(views.front.canvas);
+resetMeta(views.front.result.ok?views.front.result.pots.length:0,SAMPLE_NAMES); refresh();
+})();
+</script>
