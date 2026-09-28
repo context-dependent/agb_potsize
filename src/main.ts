@@ -1,24 +1,49 @@
 import './styles.css';
-import { analyze } from './core/analyze';
-import { scaled } from './core/image';
-import { FIRINGS } from './core/pricing';
-import { IN3_PER_L, type Unit } from './core/units';
-import { makeSample, SAMPLE_NAMES } from './core/sample';
+import { analyzePhoto, fetchFirings, fetchSample } from './api';
+import type { Analysis, Unit } from './types';
+import { IN3_PER_L } from './units';
 import { renderChecks } from './ui/checks';
 import { $, $i, $s, plural, toast } from './ui/dom';
 import { draw, watchRedraw } from './ui/draw';
 import { renderPieces, syncMeta, updatePieces } from './ui/pieces';
 import { initSlip, renderSlip } from './ui/slip';
-import { resetMeta, settings, state, store, type ViewKey } from './ui/state';
+import { resetMeta, settings, state, store, type View, type ViewKey } from './ui/state';
+
+const SAMPLE_NAMES = ['Celadon vase', 'Mug', 'Tenmoku bowl'];
+const MAX_DIM = 2400; // the backend uses the same working size, so overlay coordinates line up
+
+/** Downscale to the working size. */
+function scaled(src: CanvasImageSource & { width: number; height: number }, maxDim = MAX_DIM): HTMLCanvasElement {
+  const k = Math.min(1, maxDim / Math.max(src.width, src.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(src.width * k));
+  c.height = Math.max(1, Math.round(src.height * k));
+  const g = c.getContext('2d')!;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+
+const toBlob = (c: HTMLCanvasElement, sample: boolean) =>
+  new Promise<Blob>((res, rej) => (sample ? c.toBlob(b => (b ? res(b) : rej(new Error('encode failed'))), 'image/png') : c.toBlob(b => (b ? res(b) : rej(new Error('encode failed'))), 'image/jpeg', 0.92)));
+
+async function measure(canvas: HTMLCanvasElement, sample: boolean): Promise<Analysis> {
+  return analyzePhoto(await toBlob(canvas, sample), settings());
+}
+
 
 function refresh() { syncMeta(); draw(); renderChecks(); renderPieces(); }
 
-function rerun() {
-  for (const k of ['front', 'side'] as const) {
-    const v = state.views[k];
-    if (v) v.result = analyze(v.canvas, settings());
-  }
-  refresh();
+let rerunSeq = 0;
+async function rerun() {
+  const seq = ++rerunSeq;
+  try {
+    const keys = (['front', 'side'] as const).filter(k => state.views[k]);
+    const results = await Promise.all(keys.map(k => measure(state.views[k]!.canvas, !!state.views[k]!.sample)));
+    if (seq !== rerunSeq) return;
+    keys.forEach((k, i) => { state.views[k]!.result = results[i]; });
+    refresh();
+  } catch (e) { toast((e as Error).message); }
 }
 let rerunT: number | undefined;
 const rerunSoon = () => { clearTimeout(rerunT); rerunT = window.setTimeout(rerun, 250); };
@@ -31,18 +56,27 @@ function setView(v: ViewKey) {
   refresh();
 }
 
-function process(canvas: HTMLCanvasElement, sample: boolean) {
+async function process(canvas: HTMLCanvasElement, sample: boolean) {
   $('busy').hidden = false;
-  setTimeout(() => {
-    const work = scaled(canvas, 2400);
-    const view = { canvas: work, sample, result: analyze(work, settings()) };
-    state.views[state.cur] = view;
-    $('busy').hidden = true;
-    const r = view.result;
-    if (state.cur === 'front') resetMeta(r.ok ? r.pots.length : 0, sample ? SAMPLE_NAMES : null);
+  const key = state.cur;
+  try {
+    const work = scaled(canvas);
+    const result = await measure(work, sample);
+    const view: View = { canvas: work, sample, result };
+    state.views[key] = view;
+    if (key === 'front') resetMeta(result.ok ? result.pots.length : 0, sample ? SAMPLE_NAMES : null);
     refresh();
-    toast(r.ok ? `Measured ${plural(r.pots.length, 'piece')}` : 'Could not measure. See the checks under the photo.');
-  }, 30);
+    toast(result.ok ? `Measured ${plural(result.pots.length, 'piece')}` : 'Could not measure. See the checks under the photo.');
+  } catch (e) {
+    toast((e as Error).message || 'Could not reach the measuring service.');
+  } finally {
+    $('busy').hidden = true;
+  }
+}
+
+async function loadSample(): Promise<HTMLCanvasElement> {
+  const bmp = await createImageBitmap(await fetchSample());
+  return scaled(bmp);
 }
 
 function showRate() {
@@ -78,7 +112,7 @@ function initControls() {
   $('vFront').onclick = () => setView('front');
   $('vSide').onclick = () => setView('side');
   $('clearViewBtn').onclick = () => { state.views.side = null; refresh(); };
-  $('sampleBtn').onclick = () => { setView('front'); state.views.side = null; process(makeSample(), true); };
+  $('sampleBtn').onclick = async () => { setView('front'); state.views.side = null; try { await process(await loadSample(), true); } catch (e) { toast((e as Error).message); } };
   $i('file').onchange = e => {
     const input = e.target as HTMLInputElement, f = input.files && input.files[0];
     if (!f) return;
@@ -97,7 +131,7 @@ function initControls() {
     input.value = '';
   };
 
-  FIRINGS.forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.label; $('firing').append(o); });
+  state.firings.forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.label; $('firing').append(o); });
   $s('firing').value = store.get('firing', 'c6');
   $i('minFee').value = (+store.get('minFee', 1)).toFixed(2);
   $i('potter').value = store.get('potter', '');
@@ -116,16 +150,23 @@ function initControls() {
   $('uCm').onclick = () => setUnit('cm');
 }
 
-initControls();
-initSlip();
-watchRedraw();
-if (!state.slip) state.slip = [{ name: 'Example: mug', firing: 'c6', h: 4, w: 5, d: 3.5, vol: 70, fee: 2.45 }];
-setUnit(state.unit);
-renderSlip();
-const front = scaled(makeSample(), 2400);
-state.views.front = { canvas: front, sample: true, result: analyze(front, settings()) };
-{ const r = state.views.front.result; resetMeta(r.ok ? r.pots.length : 0, SAMPLE_NAMES); }
-refresh();
+async function boot() {
+  state.firings = await fetchFirings();
+  state.rates = { ...Object.fromEntries(state.firings.map(f => [f.id, f.rate])), ...(state.rates || {}) };
+  initControls();
+  initSlip();
+  watchRedraw();
+  if (!state.slip) state.slip = [{ name: 'Example: mug', firing: 'c6', h: 4, w: 5, d: 3.5, vol: 70, fee: 2.45 }];
+  setUnit(state.unit);
+  renderSlip();
+  const front = await loadSample();
+  const result = await measure(front, true);
+  state.views.front = { canvas: front, sample: true, result };
+  resetMeta(result.ok ? result.pots.length : 0, SAMPLE_NAMES);
+  refresh();
+}
 
-// Debug hook, kept from the prototype so the two builds can be compared in a browser.
-(window as unknown as { __ksm: unknown }).__ksm = { analyze: (c: HTMLCanvasElement) => analyze(c, settings()), views: state.views };
+boot().catch(e => toast(`Could not reach the measuring service: ${(e as Error).message}`));
+
+// Debug hook: inspect what the backend returned for the current photos.
+(window as unknown as { __ksm: unknown }).__ksm = { views: state.views, quote: () => state.quote };

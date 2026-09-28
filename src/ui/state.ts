@@ -1,7 +1,7 @@
-import type { Analysis, Settings } from '../core/types';
-import { FIRINGS, defaultRates, type Rates } from '../core/pricing';
-import type { Unit } from '../core/units';
+import type { Analysis, Firing, Quote, Settings, Unit } from '../types';
 import { $i, $s } from './dom';
+
+export type Rates = Record<string, number>;
 
 /** localStorage wrapper; every failure (private mode, quota) falls back to the default. */
 export const store = {
@@ -48,7 +48,9 @@ export type ViewKey = 'front' | 'side';
 
 export const state = {
   unit: store.get<Unit>('unit', 'in'),
-  rates: store.get<Rates>('rates', defaultRates()),
+  firings: [] as Firing[],
+  rates: store.get<Rates | null>('rates', null) as Rates,
+  quote: null as Quote | null,
   slip: store.get<SlipItem[] | null>('slip', null) as SlipItem[],
   views: { front: null, side: null } as Record<ViewKey, View | null>,
   cur: 'front' as ViewKey,
@@ -63,5 +65,3 @@ export function resetMeta(n: number, names?: string[] | null) {
   const f = $s('firing').value;
   state.meta = Array.from({ length: n }, (_, i) => ({ name: (names && names[i]) || '', firing: f, round: true, depthMm: null, qty: 1 }));
 }
-
-export { FIRINGS };
