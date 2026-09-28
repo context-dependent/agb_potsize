@@ -1,0 +1,5 @@
+{
+  "name": "agb_potsize",
+  "private": true,
+  "scripts": { "test": "node --test" }
+}
