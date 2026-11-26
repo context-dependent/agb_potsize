@@ -39,6 +39,8 @@ The script prints the URL(s) to open on a phone connected to the same Wi-Fi. It 
 - **With [mkcert](https://github.com/FiloSottile/mkcert) installed** (run `mkcert -install` once), the cert is trusted on the host. To avoid warnings on a phone, install mkcert's root CA (`mkcert -CAROOT`) on it.
 - **Otherwise** it makes a self-signed cert with `openssl`; each phone shows a one-time warning to accept.
 
+On Windows, install mkcert (`winget install FiloSottile.mkcert`) or have `openssl` on PATH (it ships with Git for Windows under `usr\bin`); the script needs one of them to create the certificate.
+
 If the host's IP changes, run `npm run dev:https -- --regen`. Keep the host awake and allow inbound connections on port 4443 (5173 for the dev server) in its firewall.
 
 ## Layout
