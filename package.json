@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "dev:https": "node scripts/serve-https.mjs --dev",
+    "serve:https": "node scripts/serve-https.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests"
   },
