@@ -24,6 +24,23 @@ Other scripts:
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Unit tests for the geometry, measurement and pricing modules |
 
+## Use it on phones (HTTPS on the local network)
+
+Phone browsers only allow camera capture on HTTPS (or localhost). From the machine that will host the app:
+
+```sh
+npm install
+npm run dev:https      # hot-reload dev server at https://<your-LAN-IP>:5173
+npm run serve:https    # or: build, then serve the production build on :4443
+```
+
+The script prints the URL(s) to open on a phone connected to the same Wi-Fi. It creates a certificate in `.certs/` (git-ignored) covering `localhost` and this machine's LAN IPs:
+
+- **With [mkcert](https://github.com/FiloSottile/mkcert) installed** (run `mkcert -install` once), the cert is trusted on the host. To avoid warnings on a phone, install mkcert's root CA (`mkcert -CAROOT`) on it.
+- **Otherwise** it makes a self-signed cert with `openssl`; each phone shows a one-time warning to accept.
+
+If the host's IP changes, run `npm run dev:https -- --regen`. Keep the host awake and allow inbound connections on port 4443 (5173 for the dev server) in its firewall.
+
 ## Layout
 
 ```
