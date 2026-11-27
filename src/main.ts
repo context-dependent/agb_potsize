@@ -8,6 +8,7 @@ import { renderChecks } from './ui/checks';
 import { $, $i, $s, plural, toast } from './ui/dom';
 import { draw, watchRedraw } from './ui/draw';
 import { renderPieces, syncMeta, updatePieces } from './ui/pieces';
+import { initLive, stopLive } from './ui/live';
 import { initSlip, renderSlip } from './ui/slip';
 import { resetMeta, settings, state, store, type ViewKey } from './ui/state';
 
@@ -32,6 +33,7 @@ function setView(v: ViewKey) {
 }
 
 function process(canvas: HTMLCanvasElement, sample: boolean) {
+  stopLive();
   $('busy').hidden = false;
   setTimeout(() => {
     const work = scaled(canvas, 2400);
@@ -118,6 +120,7 @@ function initControls() {
 
 initControls();
 initSlip();
+initLive(c => { if (state.cur === 'front') state.views.side = null; process(c, false); });
 watchRedraw();
 if (!state.slip) state.slip = [{ name: 'Example: mug', firing: 'c6', h: 4, w: 5, d: 3.5, vol: 70, fee: 2.45 }];
 setUnit(state.unit);

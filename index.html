@@ -33,12 +33,24 @@
             <span id="shootLbl">Photograph front view</span>
             <input id="file" type="file" accept="image/*" capture="environment" hidden>
           </label>
+          <button class="btn" id="liveBtn" type="button">Live camera</button>
           <button class="btn" id="sampleBtn" type="button">Load sample</button>
           <button class="btn" id="clearViewBtn" type="button" hidden>Remove side view</button>
         </div>
         <div class="stage" id="stage">
           <canvas id="cv" aria-label="Photo with the detected marker and pot outline"></canvas>
           <p class="emptyview" id="emptyView" hidden>No side view yet. Turn each piece a quarter turn where it stands, keeping the same order, and take a second photo to measure depths. Skip this for round pieces.</p>
+          <div class="livepane" id="livePane" hidden>
+            <div class="livevid">
+              <video id="liveVideo" playsinline muted autoplay></video>
+              <canvas id="liveOverlay" aria-hidden="true"></canvas>
+              <span class="livestatus" id="liveStatus" role="status" aria-live="polite">Starting…</span>
+            </div>
+            <div class="livebar">
+              <button class="btn primary" id="liveShoot" type="button" disabled>Capture</button>
+              <button class="btn" id="liveClose" type="button">Close camera</button>
+            </div>
+          </div>
           <span class="badge" id="badge" hidden>Sample photo</span>
           <div class="busy" id="busy" hidden>Measuring…</div>
         </div>
