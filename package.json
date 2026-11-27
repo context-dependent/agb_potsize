@@ -1,12 +1,16 @@
 {
   "name": "agb_potsize",
   "private": true,
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "dev:https": "node scripts/serve-https.mjs --dev",
+    "serve:https": "node scripts/serve-https.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run tests"
   },
   "version": "0.1.0",
   "type": "module",
