@@ -13,7 +13,7 @@ npm install
 npm run dev        # http://localhost:5173, with hot reload
 ```
 
-Open it and the sample scene (three synthetic pots and an 80 mm ID 7 marker) loads automatically. Use **Load sample** to reload it, or **Photograph front view** to use a real photo. To try it on a phone, run `npm run dev -- --host` and open the printed network URL (camera capture needs HTTPS or localhost on most phones).
+Open it and the sample scene (three synthetic pots and an 80 mm ID 7 marker) loads automatically. Use **Load sample** to reload it, **Photograph front view** to use a real photo, or **Live camera** to see the marker and pieces outlined in real time (with width × height and an approximate kiln-space volume on each piece) before tapping **Capture**. To try it on a phone, run `npm run dev -- --host` and open the printed network URL (camera capture needs HTTPS or localhost on most phones).
 
 Other scripts:
 
